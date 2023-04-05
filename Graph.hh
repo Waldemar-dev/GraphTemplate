@@ -21,77 +21,38 @@ template <class A>
 using voidClassFunctionType = void (A::*)(void);
 
 template <class A>
-struct Interface
-{
-
-  std::map<std::string, std::pair<voidFunctionType, std::type_index>> m1;
-  std::map<std::string, std::pair<voidClassFunctionType<A>, std::type_index>> m2;
-
-  template <typename T>
-  void insertFunction(std::string s1, T f1)
-  {
-    auto tt = std::type_index(typeid(f1));
-    m1.insert(std::make_pair(s1, std::make_pair((voidFunctionType)f1, tt)));
-  }
-
-  template <typename T>
-  void insertClassFunction(std::string s1, T f1)
-  {
-    auto tt = std::type_index(typeid(f1));
-    m2.insert(std::make_pair((std::string)s1, std::make_pair((voidClassFunctionType<A>)f1, tt)));
-  }
-
-  template <typename T, typename... Args>
-  T searchAndCall(std::string s1, Args &&...args)
-  {
-    auto mapIter = m1.find(s1);
-    auto mapVal = mapIter->second;
-
-    // auto typeCastedFun = reinterpret_cast<T(*)(Args ...)>(mapVal.first);
-    auto typeCastedFun = (T(*)(Args...))(mapVal.first);
-
-    // compare if the types are equal or not
-    assert(mapVal.second == std::type_index(typeid(typeCastedFun)));
-    return typeCastedFun(std::forward<Args>(args)...);
-  }
-
-  template <typename T, typename... Args>
-  T callClassFunction(A a, std::string s1, Args &&...args)
-  {
-    auto mapIter = m2.find(s1);
-    auto mapVal = mapIter->second;
-
-    auto typeCastedFun = (T(A::*)(Args...))(mapVal.first);
-
-    assert(mapVal.second == std::type_index(typeid(typeCastedFun)));
-    return (a.*typeCastedFun)(std::forward<Args>(args)...);
-  }
-};
-
-template <class A>
 class Node
 {
 public:
   // Node() : name_("Default"), externalID_(0) {}
   Node(std::string inName, uint inID) : name_(inName), externalID_(inID) {}
   Node(std::string inName, uint inID, std::string inType, double inValue) : name_(inName), externalID_(inID), data_(std::map<std::string, double>({inType, inValue})) {}
-  Node(const Node<A> &inNode) : name_(inNode.getName()), externalID_(inNode.getID()), dataFunctions_(inNode.getInterface()), data_(inNode.getData()) {}
+  Node(const Node<A> &inNode) : name_(inNode.getName()), externalID_(inNode.getID()), data_(inNode.getData()), functions_(inNode.getFunctions()), classFunctions_(inNode.getClassFunctions()) {}
   ~Node() = default;
 
   void addData(std::string inType, double inValue) { data_[inType] = inValue; }
   std::map<std::string, double> getData() const { return data_; }
-  Interface<A> *getInterfacePointer() { return &dataFunctions_; }
-  Interface<A> getInterface() const { return dataFunctions_; }
   std::string getName() const { return name_; }
   uint getID() const { return externalID_; }
+  auto getFunctions() const { return functions_; }
+  auto getClassFunctions() const { return classFunctions_; }
+  template <typename T>
+  void insertFunction(std::string s1, T f1);
+  template <typename T>
+  void insertClassFunction(std::string s1, T f1);
+  template <typename T, typename... Args>
+  T searchAndCall(std::string s1, Args &&...args);
+  template <typename T, typename... Args>
+  T searchAndCall(A a, std::string s1, Args &&...args);
   void operator=(const Node<A> &);
   bool operator==(const Node<A> &);
 
 private:
   std::string name_;
   uint externalID_;
-  Interface<A> dataFunctions_;
   std::map<std::string, double> data_;
+  std::map<std::string, std::pair<voidFunctionType, std::type_index>> functions_;
+  std::map<std::string, std::pair<voidClassFunctionType<A>, std::type_index>> classFunctions_;
 };
 
 template <class A>
@@ -99,24 +60,31 @@ class Edge
 {
 public:
   Edge(std::shared_ptr<Node<A>> node1, std::shared_ptr<Node<A>> node2) : nodes_(std::pair<std::shared_ptr<Node<A>>, std::shared_ptr<Node<A>>>(std::move(node1), std::move(node2))) {}
-  Edge(const Edge<A> &inEdge) : dataFunctions_(inEdge.getInterface()), data_(inEdge.getData()), nodes_(inEdge.getNodes()) {}
+  Edge(const Edge<A> &inEdge) : data_(inEdge.getData()), nodes_(inEdge.getNodes()), functions_(inEdge.getFunctions()), classFunctions_(inEdge.getClassFunctions()) {}
   ~Edge() = default;
 
   void addData(std::string inType, double inValue) { data_[inType] = inValue; }
   std::map<std::string, double> getData() const { return data_; }
-  Interface<A> *getInterfacePointer() { return &dataFunctions_; }
-  Interface<A> getInterface() const { return dataFunctions_; }
-  std::pair<std::shared_ptr<Node<A>>, std::shared_ptr<Node<A>>> getNodes() const
-  {
-    return nodes_;
-  }
+  std::pair<std::shared_ptr<Node<A>>, std::shared_ptr<Node<A>>> getNodes() const { return nodes_; }
+  void changeNodes(std::shared_ptr<Node<A>>, std::shared_ptr<Node<A>>);
+  auto getFunctions() const { return functions_; }
+  auto getClassFunctions() const { return classFunctions_; }
+  template <typename T>
+  void insertFunction(std::string s1, T f1);
+  template <typename T>
+  void insertClassFunction(std::string s1, T f1);
+  template <typename T, typename... Args>
+  T searchAndCall(std::string s1, Args &&...args);
+  template <typename T, typename... Args>
+  T searchAndCall(A a, std::string s1, Args &&...args);
   void operator=(const Edge<A> &);
   bool operator==(const Edge<A> &);
 
 private:
-  Interface<A> dataFunctions_;
   std::map<std::string, double> data_;
   std::pair<std::shared_ptr<Node<A>>, std::shared_ptr<Node<A>>> nodes_;
+  std::map<std::string, std::pair<voidFunctionType, std::type_index>> functions_;
+  std::map<std::string, std::pair<voidClassFunctionType<A>, std::type_index>> classFunctions_;
 };
 
 template <class A>
@@ -124,17 +92,15 @@ class Graph
 {
 public:
   Graph() {}
-  Graph(const Graph &in) : nodes_(in.getNodes()), edges_(in.getEdges()), endNodes_(in.getEndNodes()), edgeMap_(in.getEdgeMap()), allPaths_(in.getAllPaths()) {}
+  Graph(const Graph &in) : nodes_(in.getNodes()), edges_(in.getEdges()), endNodes_(in.getEndNodes()), allPaths_(in.getAllPaths()) {}
   ~Graph() = default;
   const Node<A> *getRootNode() const { return &nodes_[0]; } // TO DO
-  void add(Node<A>, std::map<std::string, double>, Node<A>);
   void add(Node<A>, Edge<A>, Node<A>);
   void addToEndNode(Node<A> inNode, Graph<A> inGraph, bool refreshEndNodes = true);
   void connectGraphs(std::vector<Node<A>>, Graph<A>);
   std::vector<Edge<A>> getEdges() const { return edges_; }
   std::vector<Node<A>> getNodes() const { return nodes_; }
   std::vector<std::shared_ptr<Node<A>>> getEndNodes() const { return endNodes_; }
-  std::multimap<uint, std::pair<uint, std::map<std::string, double>>> getEdgeMap() const { return edgeMap_; }
   std::vector<Path<A>> getAllPaths() const { return allPaths_; }
   uint getNAllPaths() const { return allPaths_.size(); }
   void findAllPaths();
@@ -149,7 +115,6 @@ private:
   std::vector<Node<A>> nodes_;
   std::vector<Edge<A>> edges_;
   std::vector<std::shared_ptr<Node<A>>> endNodes_;
-  std::multimap<uint, std::pair<uint, std::map<std::string, double>>> edgeMap_;
   std::unordered_multimap<uint, std::pair<uint, uint>> graphMap_;
   std::vector<Path<A>> allPaths_;
 };
@@ -180,20 +145,70 @@ private:
 };
 
 // definitions for Node
+
+template <class A>
+template <typename T>
+void Node<A>::insertFunction(std::string s1, T f1)
+{
+  auto tt = std::type_index(typeid(f1));
+  functions_.insert(std::make_pair(s1, std::make_pair((voidFunctionType)f1, tt)));
+}
+
+template <class A>
+template <typename T>
+void Node<A>::insertClassFunction(std::string s1, T f1)
+{
+  auto tt = std::type_index(typeid(f1));
+  classFunctions_.insert(std::make_pair((std::string)s1, std::make_pair((voidClassFunctionType<A>)f1, tt)));
+}
+
+template <class A>
+template <typename T, typename... Args>
+T Node<A>::searchAndCall(std::string s1, Args &&...args)
+{
+  auto mapIter = functions_.find(s1);
+  auto mapVal = mapIter->second;
+
+  // auto typeCastedFun = reinterpret_cast<T(*)(Args ...)>(mapVal.first);
+  auto typeCastedFun = (T(*)(Args...))(mapVal.first);
+
+  // compare if the types are equal or not
+  assert(mapVal.second == std::type_index(typeid(typeCastedFun)));
+  return typeCastedFun(std::forward<Args>(args)...);
+}
+
+template <class A>
+template <typename T, typename... Args>
+T Node<A>::searchAndCall(A a, std::string s1, Args &&...args)
+{
+  auto mapIter = classFunctions_.find(s1);
+  auto mapVal = mapIter->second;
+
+  auto typeCastedFun = (T(A::*)(Args...))(mapVal.first);
+
+  assert(mapVal.second == std::type_index(typeid(typeCastedFun)));
+  return (a.*typeCastedFun)(std::forward<Args>(args)...);
+}
+
 template <class A>
 void Node<A>::operator=(const Node<A> &inNode)
 {
   name_ = inNode.getName();
   externalID_ = inNode.getID();
   data_ = inNode.getData();
-  dataFunctions_ = inNode.getInterface();
+  functions_ = inNode.getFunctions();
+  classFunctions_ = inNode.getClassFunctions();
 }
 
 template <class A>
 bool Node<A>::operator==(const Node<A> &inNode)
 {
-  if (dataFunctions_.m1 == inNode.getInterface().m1 && dataFunctions_.m2 == inNode.getInterface().m2 &&
-      data_ == inNode.getData() && name_ == inNode.getName() && externalID_ == inNode.getID())
+  bool names = (name_ == inNode.getName());
+  bool ids = (externalID_ == inNode.getID());
+  bool functions = (functions_ == inNode.getFunctions());
+  bool classFunctions = (classFunctions_ == inNode.getClassFunctions());
+  bool data = (data_ == inNode.getData());
+  if (names && ids && data && functions && classFunctions)
   {
     return true;
   }
@@ -202,10 +217,61 @@ bool Node<A>::operator==(const Node<A> &inNode)
 
 // definitions for Edge
 template <class A>
+void Edge<A>::changeNodes(std::shared_ptr<Node<A>> node1, std::shared_ptr<Node<A>> node2)
+{
+  nodes_.first = std::move(node1);
+  nodes_.second = std::move(node2);
+}
+
+template <class A>
+template <typename T>
+void Edge<A>::insertFunction(std::string s1, T f1)
+{
+  auto tt = std::type_index(typeid(f1));
+  functions_.insert(std::make_pair(s1, std::make_pair((voidFunctionType)f1, tt)));
+}
+
+template <class A>
+template <typename T>
+void Edge<A>::insertClassFunction(std::string s1, T f1)
+{
+  auto tt = std::type_index(typeid(f1));
+  classFunctions_.insert(std::make_pair((std::string)s1, std::make_pair((voidClassFunctionType<A>)f1, tt)));
+}
+
+template <class A>
+template <typename T, typename... Args>
+T Edge<A>::searchAndCall(std::string s1, Args &&...args)
+{
+  auto mapIter = functions_.find(s1);
+  auto mapVal = mapIter->second;
+
+  // auto typeCastedFun = reinterpret_cast<T(*)(Args ...)>(mapVal.first);
+  auto typeCastedFun = (T(*)(Args...))(mapVal.first);
+
+  // compare if the types are equal or not
+  assert(mapVal.second == std::type_index(typeid(typeCastedFun)));
+  return typeCastedFun(std::forward<Args>(args)...);
+}
+
+template <class A>
+template <typename T, typename... Args>
+T Edge<A>::searchAndCall(A a, std::string s1, Args &&...args)
+{
+  auto mapIter = classFunctions_.find(s1);
+  auto mapVal = mapIter->second;
+
+  auto typeCastedFun = (T(A::*)(Args...))(mapVal.first);
+
+  assert(mapVal.second == std::type_index(typeid(typeCastedFun)));
+  return (a.*typeCastedFun)(std::forward<Args>(args)...);
+}
+
+template <class A>
 void Edge<A>::operator=(const Edge<A> &inEdge)
 {
-  dataFunctions_.m1 = inEdge.getInterface().m1;
-  dataFunctions_.m2 = inEdge.getInterface().m2;
+  functions_ = inEdge.getFunctions();
+  classFunctions_ = inEdge.getClassFunctions();
   data_ = inEdge.getData();
   nodes_ = inEdge.getNodes();
 }
@@ -213,8 +279,11 @@ void Edge<A>::operator=(const Edge<A> &inEdge)
 template <class A>
 bool Edge<A>::operator==(const Edge<A> &inEdge)
 {
-  if (dataFunctions_.m1 == inEdge.getInterface().m1 && dataFunctions_.m2 == inEdge.getInterface().m2 &&
-      data_ == inEdge.getData() && nodes_ == inEdge.getNodes())
+  bool nodes = (nodes_ == inEdge.getNodes());
+  bool data = (data_ == inEdge.getData());
+  bool functions = (functions_ == inEdge.getFunctions());
+  bool classFunctions = (classFunctions_ == inEdge.getClassFunctions());
+  if (nodes && data && functions && classFunctions)
   {
     return true;
   }
@@ -258,9 +327,8 @@ void Graph<A>::add(Node<A> inNode1, Edge<A> inEdge, Node<A> inNode2)
     nodes_.push_back(inNode2);
     node2 = std::make_shared<Node<A>>(nodes_.back());
   }
-  Edge<A> inEdgeCopy(node1, node2);
-  inEdgeCopy.getInterfacePointer()->m1 = inEdge.getInterface().m1;
-  inEdgeCopy.getInterfacePointer()->m2 = inEdge.getInterface().m2;
+  Edge<A> inEdgeCopy(inEdge);
+  inEdgeCopy.changeNodes(node1, node2);
   std::map<std::string, double> tempData(inEdge.getData());
   for (std::map<std::string, double>::iterator it = tempData.begin();
        it != tempData.end(); it++)
@@ -271,64 +339,20 @@ void Graph<A>::add(Node<A> inNode1, Edge<A> inEdge, Node<A> inNode2)
 }
 
 template <class A>
-void Graph<A>::add(Node<A> inNode1, std::map<std::string, double> inEdgeData,
-                   Node<A> inNode2)
-{
-  bool addNode1 = true;
-  bool addNode2 = true;
-  Node<A> *node1 = 0;
-  Node<A> *node2 = 0;
-  for (uint i = 0; i < nodes_.size(); i++)
-  {
-    if (nodes_[i] == inNode1)
-    {
-      addNode1 = false;
-      node1 = &nodes_[i];
-    }
-    else if (nodes_[i] == inNode2)
-    {
-      addNode2 = false;
-      node2 = &nodes_[i];
-    }
-    if (!addNode1 && !addNode2)
-    {
-      break;
-    }
-  }
-  if (addNode1)
-  {
-    inNode1.addData("ID", nodes_.size());
-    nodes_.push_back(inNode1);
-    node1 = &nodes_.back();
-  }
-  if (addNode2)
-  {
-    inNode2.addData("ID", nodes_.size());
-    nodes_.push_back(inNode2);
-    node2 = &nodes_.back();
-  }
-  std::pair<uint, std::map<std::string, double>> tempEntry(
-      node2->getData()["ID"], inEdgeData);
-  edgeMap_.insert(
-      std::pair<uint, std::pair<uint, std::map<std::string, double>>>(
-          node1->getData()["ID"], tempEntry));
-}
-
-template <class A>
 void Graph<A>::findEndNodes()
 {
   std::vector<std::shared_ptr<Node<A>>> endPoints{
       std::make_shared<Node<A>>(nodes_[0])};
   for (uint i = 0; i < endPoints.size(); i++)
   {
-    if (edgeMap_.find(endPoints[i]->getData()["ID"]) != edgeMap_.end())
+    if (graphMap_.find(endPoints[i]->getData()["ID"]) != graphMap_.end())
     {
       std::pair<
           std::multimap<
               uint, std::pair<uint, std::map<std::string, double>>>::iterator,
           std::multimap<
               uint, std::pair<uint, std::map<std::string, double>>>::iterator>
-          range = edgeMap_.equal_range(endPoints[i]->getData()["ID"]);
+          range = graphMap_.equal_range(endPoints[i]->getData()["ID"]);
       for (std::multimap<uint, std::pair<uint, std::map<std::string, double>>>::
                iterator it = range.first;
            it != range.second; it++)
@@ -357,7 +381,7 @@ void Graph<A>::DFS(uint startID, uint finishID, Path<A> &result)
   }
   else
   {
-    if (edgeMap_.find(startID) != edgeMap_.end())
+    if (graphMap_.find(startID) != graphMap_.end())
     {
       std::pair<std::unordered_multimap<uint, std::pair<uint, uint>>::iterator,
                 std::unordered_multimap<uint, std::pair<uint, uint>>::iterator>
@@ -499,8 +523,6 @@ void Graph<A>::operator=(const Graph<A> &in)
 {
   nodes_ = in.getNodes();
   edges_ = in.getEdges();
-  std::multimap<uint, std::pair<uint, std::map<std::string, double>>> edgeMap_ =
-      in.getEdgeMap();
   graphMap_ = in.getGraphMap();
   allPaths_ = in.getAllPaths();
   findEndNodes();
@@ -512,7 +534,6 @@ void Graph<A>::clear()
   nodes_.clear();
   edges_.clear();
   endNodes_.clear();
-  edgeMap_.clear();
   graphMap_.clear();
   allPaths_.clear();
 }
@@ -584,32 +605,27 @@ double Path<A>::getProbability(A inObject)
            pathMap_.begin();
        it != pathMap_.end(); it++)
   {
-    if (pathEdges_[it->second.second]->getInterfacePointer()->m2.find(updateName_) !=
-        pathEdges_[it->second.second]->getInterfacePointer()->m2.end())
-    {
-      pathEdges_[it->second.second]->getInterfacePointer()->template callClassFunction<void>(inObject, updateName_);
-    }
+    pathEdges_[it->second.second]->template searchAndCall<void>(inObject, updateName_);
 
-    if (pathEdges_[it->second.second]->getInterfacePointer()->m2.find(
-            functionName) !=
-        pathEdges_[it->second.second]->getInterfacePointer()->m2.end())
+    if (pathEdges_[it->second.second]->getClassFunctions().find(functionName) !=
+        pathEdges_[it->second.second]->getClassFunctions().end())
     {
-      result *= pathEdges_[it->second.second]
-                    ->getInterfacePointer()
-                    ->template callClassFunction<double>(inObject, functionName);
+      result *= pathEdges_[it->second.second]->template searchAndCall<double>(inObject, functionName);
+    }
+    else if (pathEdges_[it->second.second]->getFunctions().find(functionName) !=
+             pathEdges_[it->second.second]->getFunctions().end())
+    {
+      result *= pathEdges_[it->second.second]->template searchAndCall<double>(functionName);
     }
     else if (pathEdges_[it->second.second]->getData().find(functionName) !=
              pathEdges_[it->second.second]->getData().end())
     {
       result *= pathEdges_[it->second.second]->getData()[functionName];
     }
-    else if (pathEdges_[it->second.second]->getInterfacePointer()->m1.find(
-                 functionName) !=
-             pathEdges_[it->second.second]->getInterfacePointer()->m1.end())
+    else
     {
-      result *= pathEdges_[it->second.second]
-                    ->getInterfacePointer()
-                    ->template callClassFunction<double>(functionName);
+      result = 0;
+      return result;
     }
   }
   return result;
@@ -622,13 +638,17 @@ double Path<A>::getSumOfValues(std::string valueName, A inObject) const
   double result = 0;
   for (std::shared_ptr<Node<A>> node : pathNodes_)
   {
-    if (node->getData().find(valueName) != node->getData().end())
+    if (node->getClassFunctions().find(valueName) != node->getClassFunctions().end())
+    {
+      result += node->template searchAndCall<B>(inObject, valueName);
+    }
+    else if (node->getFunctions().find(valueName) != node->getFunctions().end())
+    {
+      result += node->template searchAndCall<B>(valueName);
+    }
+    else if (node->getData().find(valueName) != node->getData().end())
     {
       result += node->getData()[valueName];
-    }
-    else if (node->getInterfacePointer()->m2.find(valueName) != node->getInterfacePointer()->m2.end())
-    {
-      result += node->getInterfacePointer()->template callClassFunction<B>(inObject, valueName);
     }
   }
   return result;

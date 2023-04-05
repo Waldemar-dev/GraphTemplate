@@ -75,7 +75,7 @@ public:
   // Node() : name_("Default"), externalID_(0) {}
   Node(std::string inName, uint inID) : name_(inName), externalID_(inID) {}
   Node(std::string inName, uint inID, std::string inType, double inValue) : name_(inName), externalID_(inID), data_(std::map<std::string, double>({inType, inValue})) {}
-  Node(const Node &inNode) : name_(inNode.getName()), externalID_(inNode.getID()), dataFunctions_(inNode.getInterface()), data_(inNode.getData()) {}
+  Node(const Node<A> &inNode) : name_(inNode.getName()), externalID_(inNode.getID()), dataFunctions_(inNode.getInterface()), data_(inNode.getData()) {}
   ~Node() = default;
 
   void addData(std::string inType, double inValue) { data_[inType] = inValue; }
@@ -99,7 +99,7 @@ class Edge
 {
 public:
   Edge(std::shared_ptr<Node<A>> node1, std::shared_ptr<Node<A>> node2) : nodes_(std::pair<std::shared_ptr<Node<A>>, std::shared_ptr<Node<A>>>(std::move(node1), std::move(node2))) {}
-  Edge(const Edge &inEdge) : dataFunctions_(inEdge.getInterface()), data_(inEdge.getData()), nodes_(inEdge.getNodes()) {}
+  Edge(const Edge<A> &inEdge) : dataFunctions_(inEdge.getInterface()), data_(inEdge.getData()), nodes_(inEdge.getNodes()) {}
   ~Edge() = default;
 
   void addData(std::string inType, double inValue) { data_[inType] = inValue; }
@@ -110,8 +110,8 @@ public:
   {
     return nodes_;
   }
-  void operator=(Edge<A>);
-  bool operator==(Edge<A>);
+  void operator=(const Edge<A> &);
+  bool operator==(const Edge<A> &);
 
 private:
   Interface<A> dataFunctions_;
@@ -140,7 +140,7 @@ public:
   void findAllPaths();
   void clear();
   std::unordered_multimap<uint, std::pair<uint, uint>> getGraphMap() const { return graphMap_; }
-  void operator=(Graph);
+  void operator=(const Graph<A> &);
 
 private:
   void findEndNodes();
@@ -190,9 +190,9 @@ void Node<A>::operator=(const Node<A> &inNode)
 }
 
 template <class A>
-bool Node<A>::operator==(const Node &inNode)
+bool Node<A>::operator==(const Node<A> &inNode)
 {
-  if (dataFunctions_.m1 == inNode.getInterfacePointer()->m1 && dataFunctions_.m2 == inNode.getInterfacePointer()->m2 &&
+  if (dataFunctions_.m1 == inNode.getInterface().m1 && dataFunctions_.m2 == inNode.getInterface().m2 &&
       data_ == inNode.getData() && name_ == inNode.getName() && externalID_ == inNode.getID())
   {
     return true;
@@ -202,18 +202,18 @@ bool Node<A>::operator==(const Node &inNode)
 
 // definitions for Edge
 template <class A>
-void Edge<A>::operator=(Edge inEdge)
+void Edge<A>::operator=(const Edge<A> &inEdge)
 {
-  dataFunctions_.m1 = inEdge.getInterfacePointer()->m1;
-  dataFunctions_.m2 = inEdge.getInterfacePointer()->m2;
+  dataFunctions_.m1 = inEdge.getInterface().m1;
+  dataFunctions_.m2 = inEdge.getInterface().m2;
   data_ = inEdge.getData();
   nodes_ = inEdge.getNodes();
 }
 
 template <class A>
-bool Edge<A>::operator==(Edge inEdge)
+bool Edge<A>::operator==(const Edge<A> &inEdge)
 {
-  if (dataFunctions_.m1 == inEdge.getInterfacePointer()->m1 && dataFunctions_.m2 == inEdge.getInterfacePointer()->m2 &&
+  if (dataFunctions_.m1 == inEdge.getInterface().m1 && dataFunctions_.m2 == inEdge.getInterface().m2 &&
       data_ == inEdge.getData() && nodes_ == inEdge.getNodes())
   {
     return true;
@@ -495,7 +495,7 @@ void Graph<A>::connectGraphs(std::vector<Node<A>> inNode, Graph<A> inGraph)
 }
 
 template <class A>
-void Graph<A>::operator=(Graph in)
+void Graph<A>::operator=(const Graph<A> &in)
 {
   nodes_ = in.getNodes();
   edges_ = in.getEdges();

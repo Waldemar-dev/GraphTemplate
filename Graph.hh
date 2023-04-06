@@ -42,7 +42,7 @@ public:
   template <typename T, typename... Args>
   T searchAndCall(A a, std::string s1, Args &&...args);
   void operator=(const Node<A> &);
-  bool operator==(const Node<A> &);
+  bool operator==(const Node<A> &) const;
 
 private:
   std::string name_;
@@ -75,7 +75,7 @@ public:
   template <typename T, typename... Args>
   T searchAndCall(A a, std::string s1, Args &&...args);
   void operator=(const Edge<A> &);
-  bool operator==(const Edge<A> &);
+  bool operator==(const Edge<A> &) const;
 
 private:
   std::map<std::string, double> data_;
@@ -99,7 +99,7 @@ public:
   void add(Node<A>, Edge<A>, Node<A>);
   void clear();
   void operator=(const BaseGraph<A> &);
-  bool operator==(const BaseGraph<A> &);
+  bool operator==(const BaseGraph<A> &) const;
 
 protected:
   void findEndNodes();
@@ -118,7 +118,7 @@ public:
   Path(const Path &in) : BaseGraph<A>::BaseGraph(in), updateName_(in.getUpdateName()) {}
   ~Path() = default;
 
-  Node<A> getRootNode();
+  Node<A> getRootNode() const;
   void addToEndNode(Node<A> inNode, Path<A> inGraph);
   void setUpdateName(std::string inName) { updateName_ = inName; }
   double getProbability(A);
@@ -128,7 +128,7 @@ public:
 
   void clear();
   void operator=(const Path<A> &);
-  bool operator==(const Path<A> &);
+  bool operator==(const Path<A> &) const;
 
 private:
   std::string updateName_;
@@ -150,7 +150,7 @@ public:
 
   void clear();
   void operator=(const DecisionTree<A> &);
-  bool operator==(const DecisionTree<A> &);
+  bool operator==(const DecisionTree<A> &) const;
 
 private:
   void DFS(uint start, uint finish, Path<A> &);
@@ -213,7 +213,7 @@ void Node<A>::operator=(const Node<A> &inNode)
 }
 
 template <class A>
-bool Node<A>::operator==(const Node<A> &inNode)
+bool Node<A>::operator==(const Node<A> &inNode) const
 {
   bool names = (name_ == inNode.getName());
   bool ids = (externalID_ == inNode.getID());
@@ -288,7 +288,7 @@ void Edge<A>::operator=(const Edge<A> &inEdge)
 }
 
 template <class A>
-bool Edge<A>::operator==(const Edge<A> &inEdge)
+bool Edge<A>::operator==(const Edge<A> &inEdge) const
 {
   bool nodes = (nodes_ == inEdge.getNodes());
   bool data = (data_ == inEdge.getData());
@@ -358,15 +358,9 @@ void BaseGraph<A>::findEndNodes()
   {
     if (BaseGraph<A>::adjacencyMap_.find(endPoints[i]->getData()["ID"]) != adjacencyMap_.end())
     {
-      std::pair<
-          std::multimap<
-              uint, std::pair<uint, std::map<std::string, double>>>::iterator,
-          std::multimap<
-              uint, std::pair<uint, std::map<std::string, double>>>::iterator>
+      std::pair<std::multimap<uint, std::pair<uint, uint>>::iterator, std::multimap<uint, std::pair<uint, uint>>::iterator>
           range = adjacencyMap_.equal_range(endPoints[i]->getData()["ID"]);
-      for (std::multimap<uint, std::pair<uint, std::map<std::string, double>>>::
-               iterator it = range.first;
-           it != range.second; it++)
+      for (auto it = range.first; it != range.second; it++)
       {
         endPoints.push_back(std::make_shared<Node<A>>(nodes_[it->second.first]));
       }
@@ -411,7 +405,7 @@ void BaseGraph<A>::operator=(const BaseGraph<A> &in)
 }
 
 template <class A>
-bool BaseGraph<A>::operator==(const BaseGraph<A> &in) // To DO: sort
+bool BaseGraph<A>::operator==(const BaseGraph<A> &in) const // To DO: sort nodes and edges
 {
   bool nodes = (nodes_ == in.getNodes());
   bool edges = (edges_ == in.getEdges());
@@ -525,8 +519,8 @@ void DecisionTree<A>::addToEndNode(Node<A> inNode, DecisionTree<A> inGraph, bool
     uint nodesSize = BaseGraph<A>::nodes_.size();
     std::vector<Node<A>> newNodes(inGraph.getNodes());
     std::vector<Edge<A>> newEdges(inGraph.getEdges());
-    Edge<A> link(std::make_shared<Node<A>>(BaseGraph<A>::endNodes_[iNode]), std::make_shared<Node<A>>(BaseGraph<A>::newNodes[0])); // TO DO:get root node
-    add(BaseGraph<A>::endNodes_[iNode], link, newNodes[0]);
+    Edge<A> link(std::make_shared<Node<A>>(BaseGraph<A>::endNodes_[iNode]), std::make_shared<Node<A>>(newNodes[0])); // TO DO:get root node
+    add(*BaseGraph<A>::endNodes_[iNode], link, newNodes[0]);
     std::multimap<uint, std::pair<uint, uint>> tempMap(inGraph.getAdjacencyMap());
     for (std::multimap<uint, std::pair<uint, uint>>::iterator it = tempMap.begin(); it != tempMap.end(); it)
     {
@@ -566,7 +560,7 @@ void DecisionTree<A>::connectGraphs(std::vector<Node<A>> inNode, DecisionTree<A>
     for (uint iNode : iNodes)
     {
       Edge<A> link(BaseGraph<A>::endNodes_[iNode], std::make_shared<Node<A>>(newNodes[0]));
-      add(BaseGraph<A>::endNodes_[iNode], link, newNodes[0]);
+      add(*BaseGraph<A>::endNodes_[iNode], link, newNodes[0]);
     }
     std::multimap<uint, std::pair<uint, uint>> tempMap(inGraph.getAdjacencyMap());
     for (std::multimap<uint, std::pair<uint, uint>>::iterator it = tempMap.begin(); it != tempMap.end(); it++)
@@ -581,12 +575,12 @@ void DecisionTree<A>::connectGraphs(std::vector<Node<A>> inNode, DecisionTree<A>
 template <class A>
 void DecisionTree<A>::operator=(const DecisionTree<A> &in)
 {
-  copy(*in);
+  copy(&in);
   allPaths_ = in.getAllPaths();
 }
 
 template <class A>
-bool DecisionTree<A>::operator==(const DecisionTree<A> &in)
+bool DecisionTree<A>::operator==(const DecisionTree<A> &in) const
 {
   bool base = (BaseGraph<A>::operator==(in));
   bool paths = (allPaths_ == in.getAllPaths());
@@ -603,7 +597,7 @@ void DecisionTree<A>::findAllPaths()
   for (std::shared_ptr<Node<A>> endNode : BaseGraph<A>::endNodes_)
   {
     Path<A> newPath;
-    DFS(std::make_shared<Node<A>>(BaseGraph<A>::nodes_[0]), std::make_shared<Node<A>>(endNode), &newPath); // TO DO: get root node
+    DFS(std::make_shared<Node<A>>(BaseGraph<A>::nodes_[0]), endNode, &newPath); // TO DO: get root node
   }
 }
 
@@ -615,20 +609,20 @@ double Path<A>::getProbability(A inObject)
   double result = 1;
   for (auto it = BaseGraph<A>::adjacencyMap_.begin(); it != BaseGraph<A>::adjacencyMap_.end(); it++)
   {
-    BaseGraph<A>::edges_[it->second.second]->template searchAndCall<void>(inObject, updateName_);
+    BaseGraph<A>::edges_[it->second.second].template searchAndCall<void>(inObject, updateName_);
 
-    if (BaseGraph<A>::edges_[it->second.second]->getClassFunctions().find(functionName) !=
-        BaseGraph<A>::edges_[it->second.second]->getClassFunctions().end())
+    if (BaseGraph<A>::edges_[it->second.second].getClassFunctions().find(functionName) !=
+        BaseGraph<A>::edges_[it->second.second].getClassFunctions().end())
     {
-      result *= BaseGraph<A>::edges_[it->second.second]->template searchAndCall<double>(inObject, functionName);
+      result *= BaseGraph<A>::edges_[it->second.second].template searchAndCall<double>(inObject, functionName);
     }
-    else if (BaseGraph<A>::edges_[it->second.second]->getFunctions().find(functionName) !=
-             BaseGraph<A>::edges_[it->second.second]->getFunctions().end())
+    else if (BaseGraph<A>::edges_[it->second.second].getFunctions().find(functionName) !=
+             BaseGraph<A>::edges_[it->second.second].getFunctions().end())
     {
-      result *= BaseGraph<A>::edges_[it->second.second]->template searchAndCall<double>(functionName);
+      result *= BaseGraph<A>::edges_[it->second.second].template searchAndCall<double>(functionName);
     }
-    else if (BaseGraph<A>::edges_[it->second.second]->getData().find(functionName) !=
-             BaseGraph<A>::edges_[it->second.second]->getData().end())
+    else if (BaseGraph<A>::edges_[it->second.second].getData().find(functionName) !=
+             BaseGraph<A>::edges_[it->second.second].getData().end())
     {
       result *= BaseGraph<A>::edges_[it->second.second].getData()[functionName];
     }
@@ -646,7 +640,7 @@ template <typename B>
 double Path<A>::getSumOfValues(std::string valueName, A inObject) const
 {
   double result = 0;
-  Node<A> rootNode = getRootNode();
+  const Node<A> rootNode(getRootNode());
   uint rootNodeIndex = 0;
   for (uint i = 0; i < BaseGraph<A>::nodes_.size(); i++)
   {
@@ -674,8 +668,9 @@ double Path<A>::getSumOfValues(std::string valueName, A inObject) const
     {
       result += BaseGraph<A>::nodes_[lastIndex].getData()[valueName];
     }
-    uint edgeIndex = BaseGraph<A>::adjacencyMap_[lastIndex].second;
-    BaseGraph<A>::edges_[edgeIndex]->template searchAndCall<void>(inObject, updateName_);
+    auto it = BaseGraph<A>::adjacencyMap_.find(lastIndex);
+    uint edgeIndex = it->second.second;
+    BaseGraph<A>::edges_[edgeIndex].template searchAndCall<void>(inObject, updateName_);
     if (BaseGraph<A>::edges_[edgeIndex].getClassFunctions().find(valueName) != BaseGraph<A>::edges_[edgeIndex].getClassFunctions().end())
     {
       result += BaseGraph<A>::edges_[edgeIndex].template searchAndCall<B>(inObject, valueName);
@@ -694,7 +689,7 @@ double Path<A>::getSumOfValues(std::string valueName, A inObject) const
     }
     else
     {
-      lastIndex = BaseGraph<A>::adjacencyMap_[lastIndex].first;
+      lastIndex = BaseGraph<A>::adjacencyMap_.find(lastIndex)->second.first;
     }
   }
   return result;
@@ -708,7 +703,7 @@ void Path<A>::operator=(const Path<A> &in)
 }
 
 template <class A>
-bool Path<A>::operator==(const Path<A> &in)
+bool Path<A>::operator==(const Path<A> &in) const
 {
   bool base = (BaseGraph<A>::operator==(in));
   bool name = (updateName_ == in.getUpdateName());
@@ -720,7 +715,7 @@ bool Path<A>::operator==(const Path<A> &in)
 }
 
 template <class A>
-Node<A> Path<A>::getRootNode()
+Node<A> Path<A>::getRootNode() const
 {
   uint lastNodeIndex = 0;
   auto it = BaseGraph<A>::adjacencyMap_.begin();

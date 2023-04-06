@@ -7,13 +7,10 @@
 #include <string>
 #include <typeindex>
 #include <typeinfo>
-#include <unordered_map>
+#include <map>
 #include <vector>
 #include <iostream>
 #include <algorithm>
-
-template <class A>
-class Path;
 
 typedef void (*voidFunctionType)(void);
 
@@ -88,64 +85,80 @@ private:
 };
 
 template <class A>
-class Graph
+class BaseGraph
 {
 public:
-  Graph() {}
-  Graph(const Graph &in) : nodes_(in.getNodes()), edges_(in.getEdges()), endNodes_(in.getEndNodes()), allPaths_(in.getAllPaths()) {}
-  ~Graph() = default;
-  const Node<A> *getRootNode() const { return &nodes_[0]; } // TO DO
-  void add(Node<A>, Edge<A>, Node<A>);
-  void addToEndNode(Node<A> inNode, Graph<A> inGraph, bool refreshEndNodes = true);
-  void connectGraphs(std::vector<Node<A>>, Graph<A>);
+  BaseGraph();
+  BaseGraph(const BaseGraph &in) : nodes_(in.getNodes()), edges_(in.getEdges()), endNodes_(in.getEndNodes()), adjacencyMap_(in.getAdjacencyMap()) {}
+  ~BaseGraph() = default;
+
   std::vector<Edge<A>> getEdges() const { return edges_; }
   std::vector<Node<A>> getNodes() const { return nodes_; }
   std::vector<std::shared_ptr<Node<A>>> getEndNodes() const { return endNodes_; }
-  std::vector<Path<A>> getAllPaths() const { return allPaths_; }
-  uint getNAllPaths() const { return allPaths_.size(); }
-  void findAllPaths();
+  std::multimap<uint, std::pair<uint, uint>> getAdjacencyMap() const { return adjacencyMap_; }
+  void add(Node<A>, Edge<A>, Node<A>);
   void clear();
-  std::unordered_multimap<uint, std::pair<uint, uint>> getGraphMap() const { return graphMap_; }
-  void operator=(const Graph<A> &);
+  void operator=(const BaseGraph<A> &);
+  bool operator==(const BaseGraph<A> &);
 
-private:
+protected:
   void findEndNodes();
-  void DFS(uint start, uint finish, Path<A> &);
-  void DFS(std::shared_ptr<Node<A>> start, std::shared_ptr<Node<A>> finish, Path<A> &);
-  std::vector<Node<A>> nodes_;
+  void copy(const BaseGraph *);
   std::vector<Edge<A>> edges_;
-  std::vector<std::shared_ptr<Node<A>>> endNodes_;
-  std::unordered_multimap<uint, std::pair<uint, uint>> graphMap_;
-  std::vector<Path<A>> allPaths_;
+  std::vector<Node<A>> nodes_;
+  std::vector<std::shared_ptr<Node<A>>> endNodes_;          // can be empty
+  std::multimap<uint, std::pair<uint, uint>> adjacencyMap_; // adjacency matrix without the zeros
 };
 
 template <class A>
-class Path : public Graph<A>
+class Path : public BaseGraph<A>
 {
 public:
-  Path();
-  Path(const Path &);
+  Path() : updateName_("Update") {}
+  Path(const Path &in) : BaseGraph<A>::BaseGraph(in), updateName_(in.getUpdateName()) {}
   ~Path() = default;
 
-  // void add(std::shared_ptr<Node<A>>, std::shared_ptr<Edge<A>>, std::shared_ptr<Node<A>>);
+  Node<A> getRootNode();
+  void addToEndNode(Node<A> inNode, Path<A> inGraph);
   void setUpdateName(std::string inName) { updateName_ = inName; }
   double getProbability(A);
   template <typename B>
   double getSumOfValues(std::string, A) const;
   std::string getUpdateName() const { return updateName_; }
-  std::vector<std::shared_ptr<Node<A>>> getPathNodes() const { return pathNodes_; }
-  std::vector<std::shared_ptr<Edge<A>>> getPathEdges() const { return pathEdges_; }
-  std::unordered_multimap<uint, std::pair<uint, uint>> getPathMap() const { return pathMap_; }
+
+  void clear();
+  void operator=(const Path<A> &);
+  bool operator==(const Path<A> &);
 
 private:
-  std::vector<std::shared_ptr<Node<A>>> pathNodes_;
-  std::vector<std::shared_ptr<Edge<A>>> pathEdges_;
-  std::unordered_multimap<uint, std::pair<uint, uint>> pathMap_;
   std::string updateName_;
 };
 
-// definitions for Node
+template <class A>
+class DecisionTree : public BaseGraph<A>
+{
+public:
+  DecisionTree() : BaseGraph<A>::BaseGraph() {}
+  DecisionTree(const DecisionTree &in) : BaseGraph<A>::BaseGraph(in), allPaths_(in.getAllPaths()) {}
+  ~DecisionTree() = default;
 
+  void addToEndNode(Node<A> inNode, DecisionTree<A> inTree, bool refreshEndNodes = true);
+  void connectGraphs(std::vector<Node<A>>, DecisionTree<A>);
+  std::vector<Path<A>> getAllPaths() const { return allPaths_; }
+  uint getNAllPaths() const { return allPaths_.size(); }
+  void findAllPaths();
+
+  void clear();
+  void operator=(const DecisionTree<A> &);
+  bool operator==(const DecisionTree<A> &);
+
+private:
+  void DFS(uint start, uint finish, Path<A> &);
+  void DFS(std::shared_ptr<Node<A>> start, std::shared_ptr<Node<A>> finish, Path<A> &);
+  std::vector<Path<A>> allPaths_;
+};
+
+// definitions for Node
 template <class A>
 template <typename T>
 void Node<A>::insertFunction(std::string s1, T f1)
@@ -169,7 +182,6 @@ T Node<A>::searchAndCall(std::string s1, Args &&...args)
   auto mapIter = functions_.find(s1);
   auto mapVal = mapIter->second;
 
-  // auto typeCastedFun = reinterpret_cast<T(*)(Args ...)>(mapVal.first);
   auto typeCastedFun = (T(*)(Args...))(mapVal.first);
 
   // compare if the types are equal or not
@@ -246,7 +258,6 @@ T Edge<A>::searchAndCall(std::string s1, Args &&...args)
   auto mapIter = functions_.find(s1);
   auto mapVal = mapIter->second;
 
-  // auto typeCastedFun = reinterpret_cast<T(*)(Args ...)>(mapVal.first);
   auto typeCastedFun = (T(*)(Args...))(mapVal.first);
 
   // compare if the types are equal or not
@@ -290,9 +301,9 @@ bool Edge<A>::operator==(const Edge<A> &inEdge)
   return false;
 }
 
-// definitions for Graph
+// definitions for BaseGraph
 template <class A>
-void Graph<A>::add(Node<A> inNode1, Edge<A> inEdge, Node<A> inNode2)
+void BaseGraph<A>::add(Node<A> inNode1, Edge<A> inEdge, Node<A> inNode2)
 {
   bool addNode1 = true;
   bool addNode2 = true;
@@ -339,20 +350,20 @@ void Graph<A>::add(Node<A> inNode1, Edge<A> inEdge, Node<A> inNode2)
 }
 
 template <class A>
-void Graph<A>::findEndNodes()
+void BaseGraph<A>::findEndNodes()
 {
   std::vector<std::shared_ptr<Node<A>>> endPoints{
       std::make_shared<Node<A>>(nodes_[0])};
   for (uint i = 0; i < endPoints.size(); i++)
   {
-    if (graphMap_.find(endPoints[i]->getData()["ID"]) != graphMap_.end())
+    if (BaseGraph<A>::adjacencyMap_.find(endPoints[i]->getData()["ID"]) != adjacencyMap_.end())
     {
       std::pair<
           std::multimap<
               uint, std::pair<uint, std::map<std::string, double>>>::iterator,
           std::multimap<
               uint, std::pair<uint, std::map<std::string, double>>>::iterator>
-          range = graphMap_.equal_range(endPoints[i]->getData()["ID"]);
+          range = adjacencyMap_.equal_range(endPoints[i]->getData()["ID"]);
       for (std::multimap<uint, std::pair<uint, std::map<std::string, double>>>::
                iterator it = range.first;
            it != range.second; it++)
@@ -373,7 +384,56 @@ void Graph<A>::findEndNodes()
 }
 
 template <class A>
-void Graph<A>::DFS(uint startID, uint finishID, Path<A> &result)
+void BaseGraph<A>::copy(const BaseGraph<A> *in)
+{
+  edges_ = in->getEdges();
+  nodes_ = in->getNodes();
+  endNodes_ = in->getEndNodes();
+  adjacencyMap_ = in->getAdjacencyMap();
+}
+
+template <class A>
+void BaseGraph<A>::clear()
+{
+  nodes_.clear();
+  edges_.clear();
+  endNodes_.clear();
+  adjacencyMap_.clear();
+}
+
+template <class A>
+void BaseGraph<A>::operator=(const BaseGraph<A> &in)
+{
+  nodes_ = in.getNodes();
+  edges_ = in.getEdges();
+  endNodes_ = in.getEndNodes();
+  adjacencyMap_ = in.getAdjacencyMap();
+}
+
+template <class A>
+bool BaseGraph<A>::operator==(const BaseGraph<A> &in) // To DO: sort
+{
+  bool nodes = (nodes_ == in.getNodes());
+  bool edges = (edges_ == in.getEdges());
+  bool endNodes = (endNodes_ == in.getEndNodes());
+  bool adMap = (adjacencyMap_ == in.getAdjacencyMap());
+  if (nodes && edges && endNodes && adMap)
+  {
+    return true;
+  }
+  return false;
+}
+
+// definitions for DecisionTree
+template <class A>
+void DecisionTree<A>::clear()
+{
+  BaseGraph<A>::clear();
+  allPaths_.clear();
+}
+
+template <class A>
+void DecisionTree<A>::DFS(uint startID, uint finishID, Path<A> &result)
 {
   if (startID == finishID)
   {
@@ -381,19 +441,19 @@ void Graph<A>::DFS(uint startID, uint finishID, Path<A> &result)
   }
   else
   {
-    if (graphMap_.find(startID) != graphMap_.end())
+    if (BaseGraph<A>::adjacencyMap_.find(startID) != BaseGraph<A>::adjacencyMap_.end())
     {
-      std::pair<std::unordered_multimap<uint, std::pair<uint, uint>>::iterator,
-                std::unordered_multimap<uint, std::pair<uint, uint>>::iterator>
-          range = graphMap_.equal_range(startID);
-      for (std::unordered_multimap<uint, std::pair<uint, uint>>::iterator it =
+      std::pair<std::multimap<uint, std::pair<uint, uint>>::iterator,
+                std::multimap<uint, std::pair<uint, uint>>::iterator>
+          range = BaseGraph<A>::adjacencyMap_.equal_range(startID);
+      for (std::multimap<uint, std::pair<uint, uint>>::iterator it =
                range.first;
            it != range.second; it++)
       {
         Path<A> tempResult(result);
-        tempResult.add(std::make_shared<Node<A>>(nodes_[it->first]),
-                       std::make_shared<Edge<A>>(edges_[it->second.second]),
-                       std::make_shared<Node<A>>(nodes_[it->second.first]));
+        tempResult.add(std::make_shared<Node<A>>(BaseGraph<A>::nodes_[it->first]),
+                       std::make_shared<Edge<A>>(BaseGraph<A>::edges_[it->second.second]),
+                       std::make_shared<Node<A>>(BaseGraph<A>::nodes_[it->second.first]));
         DFS(it->second.first, finishID, tempResult);
       }
     }
@@ -401,7 +461,7 @@ void Graph<A>::DFS(uint startID, uint finishID, Path<A> &result)
 }
 
 template <class A>
-void Graph<A>::DFS(std::shared_ptr<Node<A>> startNode, std::shared_ptr<Node<A>> finishNode, Path<A> &result)
+void DecisionTree<A>::DFS(std::shared_ptr<Node<A>> startNode, std::shared_ptr<Node<A>> finishNode, Path<A> &result)
 {
   if (startNode == finishNode)
   {
@@ -411,9 +471,9 @@ void Graph<A>::DFS(std::shared_ptr<Node<A>> startNode, std::shared_ptr<Node<A>> 
   {
     uint startID = 0;
     bool foundStartID = false;
-    for (uint i = 0; i < nodes_.size(); i++)
+    for (uint i = 0; i < BaseGraph<A>::nodes_.size(); i++)
     {
-      if (nodes_[i] = (*startNode))
+      if (BaseGraph<A>::nodes_[i] = (*startNode))
       {
         startID = i;
         foundStartID = true;
@@ -425,30 +485,30 @@ void Graph<A>::DFS(std::shared_ptr<Node<A>> startNode, std::shared_ptr<Node<A>> 
       std::cout << "DFS cannot find start node." << std::endl;
       abort();
     }
-    std::pair<std::unordered_multimap<uint, std::pair<uint, uint>>::iterator,
-              std::unordered_multimap<uint, std::pair<uint, uint>>::iterator>
-        range = graphMap_.equal_range(startID);
-    for (std::unordered_multimap<uint, std::pair<uint, uint>>::iterator it =
+    std::pair<std::multimap<uint, std::pair<uint, uint>>::iterator,
+              std::multimap<uint, std::pair<uint, uint>>::iterator>
+        range = BaseGraph<A>::adjacencyMap_.equal_range(startID);
+    for (std::multimap<uint, std::pair<uint, uint>>::iterator it =
              range.first;
          it != range.second; it++)
     {
       Path<A> tempResult(result);
-      tempResult.add(std::make_shared<Node<A>>(nodes_[it->first]),
-                     std::make_shared<Edge<A>>(edges_[it->second.second]),
-                     std::make_shared<Node<A>>(nodes_[it->second.first]));
-      DFS(std::make_shared<Node<A>>(nodes_[it->second.first]), finishNode, tempResult);
+      tempResult.add(std::make_shared<Node<A>>(BaseGraph<A>::nodes_[it->first]),
+                     std::make_shared<Edge<A>>(BaseGraph<A>::edges_[it->second.second]),
+                     std::make_shared<Node<A>>(BaseGraph<A>::nodes_[it->second.first]));
+      DFS(std::make_shared<Node<A>>(BaseGraph<A>::nodes_[it->second.first]), finishNode, tempResult);
     }
   }
 }
 
 template <class A>
-void Graph<A>::addToEndNode(Node<A> inNode, Graph<A> inGraph, bool refreshEndNodes)
+void DecisionTree<A>::addToEndNode(Node<A> inNode, DecisionTree<A> inGraph, bool refreshEndNodes)
 {
   bool foundNode = false;
   uint iNode = 0;
-  for (uint i = 0; i < endNodes_.size(); i++)
+  for (uint i = 0; i < BaseGraph<A>::endNodes_.size(); i++)
   {
-    if ((*endNodes_[i]) == inNode)
+    if ((*BaseGraph<A>::endNodes_[i]) == inNode)
     {
       foundNode = true;
       iNode = i;
@@ -462,32 +522,32 @@ void Graph<A>::addToEndNode(Node<A> inNode, Graph<A> inGraph, bool refreshEndNod
   }
   else
   {
-    uint nodesSize = nodes_.size();
+    uint nodesSize = BaseGraph<A>::nodes_.size();
     std::vector<Node<A>> newNodes(inGraph.getNodes());
     std::vector<Edge<A>> newEdges(inGraph.getEdges());
-    Edge<A> link(std::make_shared<Node<A>>(endNodes_[iNode]), std::make_shared<Node<A>>(newNodes[0]));
-    add(endNodes_[iNode], link, newNodes[0]);
-    std::unordered_multimap<uint, std::pair<uint, uint>> tempMap(inGraph.getGraphMap());
-    for (std::unordered_multimap<uint, std::pair<uint, uint>>::iterator it = tempMap.begin(); it != tempMap.end(); it)
+    Edge<A> link(std::make_shared<Node<A>>(BaseGraph<A>::endNodes_[iNode]), std::make_shared<Node<A>>(BaseGraph<A>::newNodes[0])); // TO DO:get root node
+    add(BaseGraph<A>::endNodes_[iNode], link, newNodes[0]);
+    std::multimap<uint, std::pair<uint, uint>> tempMap(inGraph.getAdjacencyMap());
+    for (std::multimap<uint, std::pair<uint, uint>>::iterator it = tempMap.begin(); it != tempMap.end(); it)
     {
       add(newNodes[it->first], newEdges[it->second.second], newNodes[it->second.first]);
     }
   }
   if (refreshEndNodes)
   {
-    endNodes_.clear();
-    findEndNodes();
+    BaseGraph<A>::endNodes_.clear();
+    BaseGraph<A>::findEndNodes();
   }
 }
 
 template <class A>
-void Graph<A>::connectGraphs(std::vector<Node<A>> inNode, Graph<A> inGraph)
+void DecisionTree<A>::connectGraphs(std::vector<Node<A>> inNode, DecisionTree<A> inGraph)
 {
   bool foundNode = false;
   std::vector<uint> iNodes;
-  for (uint i = 0; i < endNodes_.size(); i++)
+  for (uint i = 0; i < BaseGraph<A>::endNodes_.size(); i++)
   {
-    if (std::find(inNode.begin(), inNode.end(), (*endNodes_[i])) != inNode.end())
+    if (std::find(inNode.begin(), inNode.end(), (*BaseGraph<A>::endNodes_[i])) != inNode.end())
     {
       foundNode = true;
       iNodes.push_back(i);
@@ -500,127 +560,77 @@ void Graph<A>::connectGraphs(std::vector<Node<A>> inNode, Graph<A> inGraph)
   }
   else
   {
-    uint nodesSize = nodes_.size();
+    uint nodesSize = BaseGraph<A>::nodes_.size();
     std::vector<Node<A>> newNodes(inGraph.getNodes());
     std::vector<Edge<A>> newEdges(inGraph.getEdges());
     for (uint iNode : iNodes)
     {
-      Edge<A> link(endNodes_[iNode], std::make_shared<Node<A>>(newNodes[0]));
-      add(endNodes_[iNode], link, newNodes[0]);
+      Edge<A> link(BaseGraph<A>::endNodes_[iNode], std::make_shared<Node<A>>(newNodes[0]));
+      add(BaseGraph<A>::endNodes_[iNode], link, newNodes[0]);
     }
-    std::unordered_multimap<uint, std::pair<uint, uint>> tempMap(inGraph.getGraphMap());
-    for (std::unordered_multimap<uint, std::pair<uint, uint>>::iterator it = tempMap.begin(); it != tempMap.end(); it++)
+    std::multimap<uint, std::pair<uint, uint>> tempMap(inGraph.getAdjacencyMap());
+    for (std::multimap<uint, std::pair<uint, uint>>::iterator it = tempMap.begin(); it != tempMap.end(); it++)
     {
       add(newNodes[it->first], newEdges[it->second.second], newNodes[it->second.first]);
     }
   }
-  endNodes_.clear();
-  findEndNodes();
+  BaseGraph<A>::endNodes_.clear();
+  BaseGraph<A>::findEndNodes();
 }
 
 template <class A>
-void Graph<A>::operator=(const Graph<A> &in)
+void DecisionTree<A>::operator=(const DecisionTree<A> &in)
 {
-  nodes_ = in.getNodes();
-  edges_ = in.getEdges();
-  graphMap_ = in.getGraphMap();
+  copy(*in);
   allPaths_ = in.getAllPaths();
-  findEndNodes();
 }
 
 template <class A>
-void Graph<A>::clear()
+bool DecisionTree<A>::operator==(const DecisionTree<A> &in)
 {
-  nodes_.clear();
-  edges_.clear();
-  endNodes_.clear();
-  graphMap_.clear();
-  allPaths_.clear();
+  bool base = (BaseGraph<A>::operator==(in));
+  bool paths = (allPaths_ == in.getAllPaths());
+  if (base && paths)
+  {
+    return true;
+  }
+  return false;
 }
 
 template <class A>
-void Graph<A>::findAllPaths()
+void DecisionTree<A>::findAllPaths()
 {
-  for (std::shared_ptr<Node<A>> endNode : endNodes_)
+  for (std::shared_ptr<Node<A>> endNode : BaseGraph<A>::endNodes_)
   {
     Path<A> newPath;
-    DFS(std::make_shared<Node<A>>(nodes_[0]), std::make_shared<Node<A>>(endNode), &newPath);
+    DFS(std::make_shared<Node<A>>(BaseGraph<A>::nodes_[0]), std::make_shared<Node<A>>(endNode), &newPath); // TO DO: get root node
   }
 }
 
 // definitions of Path
 template <class A>
-Path<A>::Path() : updateName_("Update") {}
-
-template <class A>
-Path<A>::Path(const Path &inPath) : pathNodes_(inPath.getPathNodes()), pathEdges_(inPath.getPathEdges()), pathMap_(inPath.getPathMap()), updateName_(inPath.getUpdateName()) {}
-
-// template <class A>
-// void Path<A>::add(std::shared_ptr<Node<A>> inNode1, std::shared_ptr<Edge<A>> inEdge1,
-//                   std::shared_ptr<Node<A>> inNode2)
-// {
-//   bool addNode1 = true;
-//   bool addNode2 = true;
-//   std::shared_ptr<Node<A>> node1 = 0;
-//   std::shared_ptr<Node<A>> node2 = 0;
-//   uint idNode1, idNode2, idEdge;
-//   for (uint i = 0; i < pathNodes_.size(); i++)
-//   {
-//     if (pathNodes_[i] == inNode1)
-//     {
-//       addNode1 = false;
-//       idNode1 = i;
-//     }
-//     else if (pathNodes_[i] == inNode2)
-//     {
-//       addNode2 = false;
-//       idNode2 = i;
-//     }
-//     if (!addNode1 && !addNode2)
-//     {
-//       break;
-//     }
-//   }
-//   if (addNode1)
-//   {
-//     pathNodes_.push_back(inNode1);
-//   }
-//   if (addNode2)
-//   {
-//     pathNodes_.push_back(inNode2);
-//   }
-//   pathEdges_.push_back(inEdge1);
-//   idEdge = pathEdges_.size() - 1;
-//   std::pair<uint, uint> node2EdgePair = {idNode2, idEdge};
-//   pathMap_.insert(
-//       std::pair<uint, std::pair<uint, uint>>(idNode1, node2EdgePair));
-// }
-
-template <class A>
 double Path<A>::getProbability(A inObject)
 {
   std::string functionName = "Probability";
   double result = 1;
-  for (std::unordered_multimap<uint, std::pair<uint, uint>>::const_iterator it =
-           pathMap_.begin();
-       it != pathMap_.end(); it++)
+  for (auto it = BaseGraph<A>::adjacencyMap_.begin(); it != BaseGraph<A>::adjacencyMap_.end(); it++)
   {
-    pathEdges_[it->second.second]->template searchAndCall<void>(inObject, updateName_);
+    BaseGraph<A>::edges_[it->second.second]->template searchAndCall<void>(inObject, updateName_);
 
-    if (pathEdges_[it->second.second]->getClassFunctions().find(functionName) !=
-        pathEdges_[it->second.second]->getClassFunctions().end())
+    if (BaseGraph<A>::edges_[it->second.second]->getClassFunctions().find(functionName) !=
+        BaseGraph<A>::edges_[it->second.second]->getClassFunctions().end())
     {
-      result *= pathEdges_[it->second.second]->template searchAndCall<double>(inObject, functionName);
+      result *= BaseGraph<A>::edges_[it->second.second]->template searchAndCall<double>(inObject, functionName);
     }
-    else if (pathEdges_[it->second.second]->getFunctions().find(functionName) !=
-             pathEdges_[it->second.second]->getFunctions().end())
+    else if (BaseGraph<A>::edges_[it->second.second]->getFunctions().find(functionName) !=
+             BaseGraph<A>::edges_[it->second.second]->getFunctions().end())
     {
-      result *= pathEdges_[it->second.second]->template searchAndCall<double>(functionName);
+      result *= BaseGraph<A>::edges_[it->second.second]->template searchAndCall<double>(functionName);
     }
-    else if (pathEdges_[it->second.second]->getData().find(functionName) !=
-             pathEdges_[it->second.second]->getData().end())
+    else if (BaseGraph<A>::edges_[it->second.second]->getData().find(functionName) !=
+             BaseGraph<A>::edges_[it->second.second]->getData().end())
     {
-      result *= pathEdges_[it->second.second]->getData()[functionName];
+      result *= BaseGraph<A>::edges_[it->second.second].getData()[functionName];
     }
     else
     {
@@ -636,21 +646,98 @@ template <typename B>
 double Path<A>::getSumOfValues(std::string valueName, A inObject) const
 {
   double result = 0;
-  for (std::shared_ptr<Node<A>> node : pathNodes_)
+  Node<A> rootNode = getRootNode();
+  uint rootNodeIndex = 0;
+  for (uint i = 0; i < BaseGraph<A>::nodes_.size(); i++)
   {
-    if (node->getClassFunctions().find(valueName) != node->getClassFunctions().end())
+    if (BaseGraph<A>::nodes_[i] == rootNode)
     {
-      result += node->template searchAndCall<B>(inObject, valueName);
+      rootNodeIndex = i;
+      break;
     }
-    else if (node->getFunctions().find(valueName) != node->getFunctions().end())
+  }
+  bool done = false;
+  uint safetyCounter = 0;
+  uint lastIndex = rootNodeIndex;
+  while (!done && safetyCounter < BaseGraph<A>::nodes_.size())
+  {
+    safetyCounter++;
+    if (BaseGraph<A>::nodes_[lastIndex].getClassFunctions().find(valueName) != BaseGraph<A>::nodes_[lastIndex].getClassFunctions().end())
     {
-      result += node->template searchAndCall<B>(valueName);
+      result += BaseGraph<A>::nodes_[lastIndex].template searchAndCall<B>(inObject, valueName);
     }
-    else if (node->getData().find(valueName) != node->getData().end())
+    else if (BaseGraph<A>::nodes_[lastIndex].getFunctions().find(valueName) != BaseGraph<A>::nodes_[lastIndex].getFunctions().end())
     {
-      result += node->getData()[valueName];
+      result += BaseGraph<A>::nodes_[lastIndex].template searchAndCall<B>(valueName);
+    }
+    else if (BaseGraph<A>::nodes_[lastIndex].getData().find(valueName) != BaseGraph<A>::nodes_[lastIndex].getData().end())
+    {
+      result += BaseGraph<A>::nodes_[lastIndex].getData()[valueName];
+    }
+    uint edgeIndex = BaseGraph<A>::adjacencyMap_[lastIndex].second;
+    BaseGraph<A>::edges_[edgeIndex]->template searchAndCall<void>(inObject, updateName_);
+    if (BaseGraph<A>::edges_[edgeIndex].getClassFunctions().find(valueName) != BaseGraph<A>::edges_[edgeIndex].getClassFunctions().end())
+    {
+      result += BaseGraph<A>::edges_[edgeIndex].template searchAndCall<B>(inObject, valueName);
+    }
+    else if (BaseGraph<A>::edges_[edgeIndex].getFunctions().find(valueName) != BaseGraph<A>::edges_[edgeIndex].getFunctions().end())
+    {
+      result += BaseGraph<A>::edges_[edgeIndex].template searchAndCall<B>(valueName);
+    }
+    else if (BaseGraph<A>::edges_[edgeIndex].getData().find(valueName) != BaseGraph<A>::edges_[edgeIndex].getData().end())
+    {
+      result += BaseGraph<A>::edges_[edgeIndex].getData()[valueName];
+    }
+    if (BaseGraph<A>::adjacencyMap_.find(lastIndex) == BaseGraph<A>::adjacencyMap_.end())
+    {
+      done = true;
+    }
+    else
+    {
+      lastIndex = BaseGraph<A>::adjacencyMap_[lastIndex].first;
     }
   }
   return result;
+}
+
+template <class A>
+void Path<A>::operator=(const Path<A> &in)
+{
+  copy(*in);
+  updateName_ = in.getUpdateName();
+}
+
+template <class A>
+bool Path<A>::operator==(const Path<A> &in)
+{
+  bool base = (BaseGraph<A>::operator==(in));
+  bool name = (updateName_ == in.getUpdateName());
+  if (base && name)
+  {
+    return true;
+  }
+  return false;
+}
+
+template <class A>
+Node<A> Path<A>::getRootNode()
+{
+  uint lastNodeIndex = 0;
+  auto it = BaseGraph<A>::adjacencyMap_.begin();
+  uint safetyCounter = 0;
+  while (it != BaseGraph<A>::adjacencyMap_.end() && safetyCounter < BaseGraph<A>::adjacencyMap_.size())
+  {
+    if (it->second.first == lastNodeIndex)
+    {
+      lastNodeIndex = it->first;
+      it = BaseGraph<A>::adjacencyMap_.begin();
+      safetyCounter++;
+    }
+    else
+    {
+      it++;
+    }
+  }
+  return BaseGraph<A>::nodes_[lastNodeIndex];
 }
 #endif

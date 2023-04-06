@@ -7,10 +7,7 @@
 #include <string>
 #include <typeindex>
 #include <typeinfo>
-#include <map>
 #include <vector>
-#include <iostream>
-#include <algorithm>
 
 typedef void (*voidFunctionType)(void);
 

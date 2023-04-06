@@ -85,7 +85,7 @@ template <class A>
 class BaseGraph
 {
 public:
-  BaseGraph();
+  BaseGraph() {}
   BaseGraph(const BaseGraph &in) : nodes_(in.getNodes()), edges_(in.getEdges()), endNodes_(in.getEndNodes()), adjacencyMap_(in.getAdjacencyMap()) {}
   ~BaseGraph() = default;
 
@@ -111,8 +111,8 @@ template <class A>
 class Path : public BaseGraph<A>
 {
 public:
-  Path() : updateName_("Update") {}
-  Path(const Path &in) : BaseGraph<A>::BaseGraph(in), updateName_(in.getUpdateName()) {}
+  Path() : BaseGraph<A>(), updateName_("Update") {}
+  Path(const Path &in) : BaseGraph<A>(in), updateName_(in.getUpdateName()) {}
   ~Path() = default;
 
   Node<A> getRootNode() const;
@@ -120,7 +120,7 @@ public:
   void setUpdateName(std::string inName) { updateName_ = inName; }
   double getProbability(A);
   template <typename B>
-  double getSumOfValues(std::string, A) const;
+  double getSumOfValues(std::string, A);
   std::string getUpdateName() const { return updateName_; }
 
   void clear();
@@ -135,10 +135,11 @@ template <class A>
 class DecisionTree : public BaseGraph<A>
 {
 public:
-  DecisionTree() : BaseGraph<A>::BaseGraph() {}
-  DecisionTree(const DecisionTree &in) : BaseGraph<A>::BaseGraph(in), allPaths_(in.getAllPaths()) {}
+  DecisionTree() : BaseGraph<A>() {}
+  DecisionTree(const DecisionTree &in) : BaseGraph<A>(in), allPaths_(in.getAllPaths()) {}
   ~DecisionTree() = default;
 
+  Node<A> getRootNode() const;
   void addToEndNode(Node<A> inNode, DecisionTree<A> inTree, bool refreshEndNodes = true);
   void connectGraphs(std::vector<Node<A>>, DecisionTree<A>);
   std::vector<Path<A>> getAllPaths() const { return allPaths_; }
@@ -151,7 +152,7 @@ public:
 
 private:
   void DFS(uint start, uint finish, Path<A> &);
-  void DFS(std::shared_ptr<Node<A>> start, std::shared_ptr<Node<A>> finish, Path<A> &);
+  void DFS(Node<A> start, Node<A> finish, Path<A> *);
   std::vector<Path<A>> allPaths_;
 };
 
@@ -452,11 +453,11 @@ void DecisionTree<A>::DFS(uint startID, uint finishID, Path<A> &result)
 }
 
 template <class A>
-void DecisionTree<A>::DFS(std::shared_ptr<Node<A>> startNode, std::shared_ptr<Node<A>> finishNode, Path<A> &result)
+void DecisionTree<A>::DFS(Node<A> startNode, Node<A> finishNode, Path<A> *result)
 {
   if (startNode == finishNode)
   {
-    allPaths_.push_back(result);
+    allPaths_.push_back(*result);
   }
   else
   {
@@ -464,7 +465,7 @@ void DecisionTree<A>::DFS(std::shared_ptr<Node<A>> startNode, std::shared_ptr<No
     bool foundStartID = false;
     for (uint i = 0; i < BaseGraph<A>::nodes_.size(); i++)
     {
-      if (BaseGraph<A>::nodes_[i] = (*startNode))
+      if (BaseGraph<A>::nodes_[i] == startNode)
       {
         startID = i;
         foundStartID = true;
@@ -483,11 +484,11 @@ void DecisionTree<A>::DFS(std::shared_ptr<Node<A>> startNode, std::shared_ptr<No
              range.first;
          it != range.second; it++)
     {
-      Path<A> tempResult(result);
-      tempResult.add(std::make_shared<Node<A>>(BaseGraph<A>::nodes_[it->first]),
-                     std::make_shared<Edge<A>>(BaseGraph<A>::edges_[it->second.second]),
-                     std::make_shared<Node<A>>(BaseGraph<A>::nodes_[it->second.first]));
-      DFS(std::make_shared<Node<A>>(BaseGraph<A>::nodes_[it->second.first]), finishNode, tempResult);
+      Path<A> tempResult(*result);
+      tempResult.add(BaseGraph<A>::nodes_[it->first],
+                     BaseGraph<A>::edges_[it->second.second],
+                     BaseGraph<A>::nodes_[it->second.first]);
+      DFS(BaseGraph<A>::nodes_[it->second.first], finishNode, &tempResult);
     }
   }
 }
@@ -516,12 +517,12 @@ void DecisionTree<A>::addToEndNode(Node<A> inNode, DecisionTree<A> inGraph, bool
     uint nodesSize = BaseGraph<A>::nodes_.size();
     std::vector<Node<A>> newNodes(inGraph.getNodes());
     std::vector<Edge<A>> newEdges(inGraph.getEdges());
-    Edge<A> link(std::make_shared<Node<A>>(BaseGraph<A>::endNodes_[iNode]), std::make_shared<Node<A>>(newNodes[0])); // TO DO:get root node
-    add(*BaseGraph<A>::endNodes_[iNode], link, newNodes[0]);
+    Edge<A> link(BaseGraph<A>::endNodes_[iNode], std::make_shared<Node<A>>(newNodes[0])); // TO DO:get root node
+    BaseGraph<A>::add(*BaseGraph<A>::endNodes_.at(iNode), link, newNodes.at(0));
     std::multimap<uint, std::pair<uint, uint>> tempMap(inGraph.getAdjacencyMap());
     for (std::multimap<uint, std::pair<uint, uint>>::iterator it = tempMap.begin(); it != tempMap.end(); it)
     {
-      add(newNodes[it->first], newEdges[it->second.second], newNodes[it->second.first]);
+      BaseGraph<A>::add(newNodes[it->first], newEdges[it->second.second], newNodes[it->second.first]);
     }
   }
   if (refreshEndNodes)
@@ -556,13 +557,13 @@ void DecisionTree<A>::connectGraphs(std::vector<Node<A>> inNode, DecisionTree<A>
     std::vector<Edge<A>> newEdges(inGraph.getEdges());
     for (uint iNode : iNodes)
     {
-      Edge<A> link(BaseGraph<A>::endNodes_[iNode], std::make_shared<Node<A>>(newNodes[0]));
-      add(*BaseGraph<A>::endNodes_[iNode], link, newNodes[0]);
+      Edge<A> link(BaseGraph<A>::endNodes_[iNode], std::make_shared<Node<A>>(newNodes[0])); // TO DO: get root node
+      BaseGraph<A>::add(*BaseGraph<A>::endNodes_[iNode], link, newNodes[0]);
     }
     std::multimap<uint, std::pair<uint, uint>> tempMap(inGraph.getAdjacencyMap());
     for (std::multimap<uint, std::pair<uint, uint>>::iterator it = tempMap.begin(); it != tempMap.end(); it++)
     {
-      add(newNodes[it->first], newEdges[it->second.second], newNodes[it->second.first]);
+      BaseGraph<A>::add(newNodes[it->first], newEdges[it->second.second], newNodes[it->second.first]);
     }
   }
   BaseGraph<A>::endNodes_.clear();
@@ -572,7 +573,7 @@ void DecisionTree<A>::connectGraphs(std::vector<Node<A>> inNode, DecisionTree<A>
 template <class A>
 void DecisionTree<A>::operator=(const DecisionTree<A> &in)
 {
-  copy(&in);
+  BaseGraph<A>::operator=(in);
   allPaths_ = in.getAllPaths();
 }
 
@@ -594,8 +595,31 @@ void DecisionTree<A>::findAllPaths()
   for (std::shared_ptr<Node<A>> endNode : BaseGraph<A>::endNodes_)
   {
     Path<A> newPath;
-    DFS(std::make_shared<Node<A>>(BaseGraph<A>::nodes_[0]), endNode, &newPath); // TO DO: get root node
+    DFS(getRootNode(), *endNode, &newPath);
+    allPaths_.push_back(newPath);
   }
+}
+
+template <class A>
+Node<A> DecisionTree<A>::getRootNode() const
+{
+  uint lastNodeIndex = 0;
+  auto it = BaseGraph<A>::adjacencyMap_.begin();
+  uint safetyCounter = 0;
+  while (it != BaseGraph<A>::adjacencyMap_.end() && safetyCounter < BaseGraph<A>::adjacencyMap_.size())
+  {
+    if (it->second.first == lastNodeIndex)
+    {
+      lastNodeIndex = it->first;
+      it = BaseGraph<A>::adjacencyMap_.begin();
+      safetyCounter++;
+    }
+    else
+    {
+      it++;
+    }
+  }
+  return BaseGraph<A>::nodes_[lastNodeIndex];
 }
 
 // definitions of Path
@@ -634,7 +658,7 @@ double Path<A>::getProbability(A inObject)
 
 template <class A>
 template <typename B>
-double Path<A>::getSumOfValues(std::string valueName, A inObject) const
+double Path<A>::getSumOfValues(std::string valueName, A inObject)
 {
   double result = 0;
   const Node<A> rootNode(getRootNode());
@@ -655,7 +679,7 @@ double Path<A>::getSumOfValues(std::string valueName, A inObject) const
     safetyCounter++;
     if (BaseGraph<A>::nodes_[lastIndex].getClassFunctions().find(valueName) != BaseGraph<A>::nodes_[lastIndex].getClassFunctions().end())
     {
-      result += BaseGraph<A>::nodes_[lastIndex].template searchAndCall<B>(inObject, valueName);
+      result += BaseGraph<A>::nodes_.at(lastIndex).template searchAndCall<B>(inObject, valueName);
     }
     else if (BaseGraph<A>::nodes_[lastIndex].getFunctions().find(valueName) != BaseGraph<A>::nodes_[lastIndex].getFunctions().end())
     {
@@ -695,7 +719,7 @@ double Path<A>::getSumOfValues(std::string valueName, A inObject) const
 template <class A>
 void Path<A>::operator=(const Path<A> &in)
 {
-  copy(*in);
+  BaseGraph<A>::operator=(in);
   updateName_ = in.getUpdateName();
 }
 
